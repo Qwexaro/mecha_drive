@@ -39,6 +39,8 @@ class Maru {
 
     void setupCommands();
 
+    void sendTextMessage(int64_t chat_id, const std::string& text);
+
     void editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text);
 
     std::unordered_map<std::string, commandHandler> _commands;

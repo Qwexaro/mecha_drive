@@ -249,41 +249,18 @@ void Maru::onAuthorizationStateUpdate(td::td_api::object_ptr<td::td_api::Authori
 
 void Maru::setupCommands() {
 
-    registerCommand(".ping", [this](const td::td_api::message& msg, const std::string& args) {
+    auto ping_logic = [this](const td::td_api::message& msg, const std::string& args) {
+        sendTextMessage(msg.chat_id_, "ПОНГ 🏓");
+    };
 
-        if(!msg.is_outgoing_) return;
+    registerCommand("ping", ping_logic);
 
-        auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
-
-        formatted_text->text_ = "pong";
-
-        auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
-
-        sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
-
-                      msg.chat_id_, td::td_api::object_ptr<td::td_api::MessageTopic>(),
-
-                      td::td_api::object_ptr<td::td_api::InputMessageReplyTo>(), td::td_api::object_ptr<td::td_api::messageSendOptions>(),
-
-                      td::td_api::object_ptr<td::td_api::ReplyMarkup>(), std::move(input_content)
-
-                  ));
+    registerCommand("пинг", ping_logic);
 
 
-
-    });
-
-    registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) {
-        if(msg.is_outgoing_) editMessageText(msg.chat_id_, msg.id_, "Hello World!");
-    });
-
-    registerCommand(".id", [this](const td::td_api::message& msg, const std::string& args) {
-
-        if (!msg.is_outgoing_) return;
+    auto inf_logic = [this](const td::td_api::message& msg, const std::string& args) {
 
         int64_t chat_id = msg.chat_id_;
-
-        int64_t my_msg_id = msg.id_;
 
         if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
 
@@ -293,65 +270,7 @@ void Maru::setupCommands() {
 
             int64_t reply_message_id = reply_info.message_id_;
 
-            sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id, my_msg_id](td::td_api::object_ptr<td::td_api::Object> response) {
-
-                if (response->get_id() == td::td_api::message::ID) {
-
-                    td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
-
-                    if (replied_msg->forward_info_) {
-
-                        td::td_api::object_ptr<td::td_api::messageForwardInfo> f_info = std::move(replied_msg->forward_info_);
-
-                        if (f_info->origin_ && f_info->origin_->get_id() == td::td_api::messageOriginUser::ID) {
-
-                            td::td_api::object_ptr<td::td_api::messageOriginUser> origin_user =
-                                td::move_tl_object_as<td::td_api::messageOriginUser>(f_info->origin_);
-
-                            int64_t replied_to_id = origin_user->sender_user_id_;
-
-                            std::string result = "Chat ID: " + std::to_string(chat_id) + ", Replied To ID: " + std::to_string(replied_to_id);
-
-                            editMessageText(chat_id, my_msg_id, result);
-
-                            return;
-
-                        }
-
-                    }
-
-                }
-
-                editMessageText(chat_id, my_msg_id, "Chat ID: " + std::to_string(chat_id));
-
-            });
-
-            return;
-
-        }
-
-        editMessageText(chat_id, my_msg_id, "Chat ID: " + std::to_string(chat_id));
-
-    });
-
-
-    registerCommand(".inf", [this](const td::td_api::message& msg, const std::string& args) {
-
-        if (!msg.is_outgoing_) return;
-
-        int64_t chat_id = msg.chat_id_;
-
-        int64_t my_msg_id = msg.id_;
-
-        if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
-
-            const auto& reply_info_base = msg.reply_to_;
-
-            auto& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*reply_info_base);
-
-            int64_t reply_message_id = reply_info.message_id_;
-
-            sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id, my_msg_id](td::td_api::object_ptr<td::td_api::Object> response) {
+            sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> response) {
 
                 if (response->get_id() == td::td_api::message::ID) {
 
@@ -363,7 +282,7 @@ void Maru::setupCommands() {
 
                         int64_t target_user_id = sender_user.user_id_;
 
-                        sendQuery(td::td_api::make_object<td::td_api::getUser>(target_user_id), [this, chat_id, my_msg_id](td::td_api::object_ptr<td::td_api::Object> user_response) {
+                        sendQuery(td::td_api::make_object<td::td_api::getUser>(target_user_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> user_response) {
 
                             if (user_response->get_id() == td::td_api::user::ID) {
 
@@ -373,16 +292,15 @@ void Maru::setupCommands() {
 
                                 int64_t user_id = user_info->id_;
 
+                                std::string result = "ℹ️ Информация о пользователе:\nИмя: " + first_name + "\nID: " + std::to_string(user_id);
 
-                                std::string result = "Информация о пользователе:\nИмя: " + first_name + "\nID: " + std::to_string(user_id);
-
-                                editMessageText(chat_id, my_msg_id, result);
+                                sendTextMessage(chat_id, result);
 
                                 return;
 
                             }
 
-                            editMessageText(chat_id, my_msg_id, "[Ошибка]: Не удалось загрузить карточку пользователя.");
+                            sendTextMessage(chat_id, "❌ Не удалось загрузить данные.");
 
                         });
 
@@ -392,7 +310,7 @@ void Maru::setupCommands() {
 
                 }
 
-                editMessageText(chat_id, my_msg_id, "[Ошибка]: Не удалось получить исходное сообщение или его автор — не пользователь.");
+                sendTextMessage(chat_id, "❌ Ошибка получения оригинального сообщения.");
 
             });
 
@@ -400,12 +318,78 @@ void Maru::setupCommands() {
 
         }
 
-        editMessageText(chat_id, my_msg_id, "[Ошибка]: Команду необходимо вызывать в ответ на сообщение пользователя.");
+        sendTextMessage(chat_id, "❌ Вызовите команду в ответ на сообщение пользователя.");
 
-    });
+    };
 
+    registerCommand("inf", inf_logic);
+
+    registerCommand("info", inf_logic);
+
+    registerCommand("инф", inf_logic);
+
+    registerCommand("инфо", inf_logic);
+
+
+    auto id_logic = [this](const td::td_api::message& msg, const std::string& args) {
+
+        int64_t chat_id = msg.chat_id_;
+
+        if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
+
+            const auto& reply_info_base = msg.reply_to_;
+
+            auto& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*reply_info_base);
+
+            int64_t reply_message_id = reply_info.message_id_;
+
+            sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> response) {
+
+                if (response->get_id() == td::td_api::message::ID) {
+
+                    td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
+
+                    if (replied_msg->forward_info_) {
+
+                        td::td_api::object_ptr<td::td_api::messageForwardInfo> f_info = std::move(replied_msg->forward_info_);
+
+                        if (f_info->origin_ && f_info->origin_->get_id() == td::td_api::messageOriginUser::ID) {
+
+                            td::td_api::object_ptr<td::td_api::messageOriginUser> origin_user = td::move_tl_object_as<td::td_api::messageOriginUser>(f_info->origin_);
+
+                            int64_t replied_to_id = origin_user->sender_user_id_;
+
+                            std::string result = "🆔 Чат: " + std::to_string(chat_id) + "\n👤 Отправитель: " + std::to_string(replied_to_id);
+
+                            sendTextMessage(chat_id, result); // Отправляем новое сообщение
+
+                            return;
+
+                        }
+
+                    }
+
+                }
+
+                sendTextMessage(chat_id, "🆔 ID Чата: " + std::to_string(chat_id));
+
+            });
+
+            return;
+
+        }
+
+        sendTextMessage(chat_id, "🆔 ID Чата: " + std::to_string(chat_id));
+
+    };
+
+    registerCommand("id", id_logic);
+
+    registerCommand("ид", id_logic);
 
 }
+
+
 
 void Maru::registerCommand(const std::string& name, commandHandler handler) {
     _commands[name] = handler;
@@ -441,16 +425,51 @@ void Maru::onNewMessage(td::td_api::object_ptr<td::td_api::message> message) {
 
         std::string text = text_content.text_->text_;
 
+        if (text.empty()) return;
+
         size_t space_pos = text.find(' ');
 
-        std::string cmd = (space_pos == std::string::npos) ? text : text.substr(0, space_pos);
+        std::string raw_cmd = (space_pos == std::string::npos) ? text : text.substr(0, space_pos);
 
         std::string args = (space_pos == std::string::npos) ? "" : text.substr(space_pos + 1);
 
-        auto it = _commands.find(cmd);
+        if (raw_cmd[0] == '.' || raw_cmd[0] == '/') raw_cmd = raw_cmd.substr(1);
+
+        std::string clean_cmd = "";
+
+        for (char c : raw_cmd) clean_cmd += std::tolower(static_cast<unsigned char>(c));
+
+        auto it = _commands.find(clean_cmd);
 
         if (it != _commands.end()) it->second(*message, args);
 
     }
 
 }
+
+void Maru::sendTextMessage(int64_t chat_id, const std::string& text) {
+
+    auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
+
+    formatted_text->text_ = text;
+
+    auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
+
+    sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
+
+                  chat_id,
+
+                  td::td_api::object_ptr<td::td_api::MessageTopic>(),
+
+                  td::td_api::object_ptr<td::td_api::InputMessageReplyTo>(),
+
+                  td::td_api::object_ptr<td::td_api::messageSendOptions>(),
+
+                  td::td_api::object_ptr<td::td_api::ReplyMarkup>(),
+
+                  std::move(input_content)
+
+              ));
+
+}
+
