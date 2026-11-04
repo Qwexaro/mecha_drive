@@ -4,7 +4,9 @@ const int32_t API_ID = API_ID;
 
 const std::string API_HASH = API_HASH;
 
-Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()}, _need_restart{0} { setupCommands(); }
+Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()}, _need_restart{0} {
+    setupCommands();
+}
 
 void Maru::run() {
 
@@ -18,13 +20,25 @@ void Maru::run() {
 
     while (_need_restart == 0) {
 
-        auto response = _client_manager->receive(10.0);
+        try {
 
-        if (response.object) processResponse(std::move(response));
+            auto response = _client_manager->receive(10.0);
 
+            if (response.object) processResponse(std::move(response));
+
+        }
+
+        catch (const std::exception& e) {
+            std::cerr << "[Критическая системная ошибка]: " << e.what() << std::endl;
+        }
+
+        catch (...) {
+            std::cerr << "[Неизвестный сбой в цикле событий]" << std::endl;
+        }
     }
 
 }
+
 
 void Maru::sendQuery(td::td_api::object_ptr<td::td_api::Function> f, std::function<void(td::td_api::object_ptr<td::td_api::Object>)> handler) {
 
@@ -37,6 +51,16 @@ void Maru::sendQuery(td::td_api::object_ptr<td::td_api::Function> f, std::functi
 }
 
 void Maru::processResponse(td::ClientManager::Response response) {
+
+    if (response.object->get_id() == td::td_api::error::ID) {
+
+        auto error = td::move_tl_object_as<td::td_api::error>(response.object);
+
+        std::cerr << "[Telegram API Error] Код: " << error->code_  << " | Описание: " << error->message_ << std::endl;
+
+        return;
+
+    }
 
     if (response.object->get_id() == td::td_api::updateAuthorizationState::ID) {
 
@@ -54,79 +78,89 @@ void Maru::processResponse(td::ClientManager::Response response) {
 
 }
 
+
 void Maru::onAuthorizationStateUpdate(td::td_api::object_ptr<td::td_api::AuthorizationState> state) {
 
     switch (state->get_id()) {
 
-        case td::td_api::authorizationStateWaitTdlibParameters::ID: {
+    case td::td_api::authorizationStateWaitTdlibParameters::ID: {
 
-            auto params = td::td_api::make_object<td::td_api::setTdlibParameters>();
+        auto params = td::td_api::make_object<td::td_api::setTdlibParameters>();
 
-            params->use_test_dc_ = false;
+        params->use_test_dc_ = false;
 
-            params->database_directory_ = "tdlib_session";
+        params->database_directory_ = "tdlib_session";
 
-            params->files_directory_ = "tdlib_files";
+        params->files_directory_ = "tdlib_files";
 
-            params->use_file_database_ = true;
+        params->use_file_database_ = true;
 
-            params->use_chat_info_database_ = true;
+        params->use_chat_info_database_ = true;
 
-            params->use_message_database_ = true;
+        params->use_message_database_ = true;
 
-            params->use_secret_chats_ = false;
+        params->use_secret_chats_ = false;
 
-            params->api_id_ = API_ID;
+        params->api_id_ = API_ID;
 
-            params->api_hash_ = API_HASH;
+        params->api_hash_ = API_HASH;
 
-            params->system_language_code_ = "en";
+        params->system_language_code_ = "en";
 
-            params->device_model_ = "C++ UserBot (Maru)";
+        params->device_model_ = "C++ UserBot (Maru)";
 
-            params->application_version_ = "1.0";
+        params->application_version_ = "1.0";
 
-            sendQuery(std::move(params));
+        sendQuery(std::move(params));
 
-            break;
+        break;
 
-        }
+    }
 
-        case td::td_api::authorizationStateWaitPhoneNumber::ID: {
+    case td::td_api::authorizationStateWaitPhoneNumber::ID: {
 
-            std::string phone_number;
+        std::string phone_number;
 
-            std::cout << "Введите номер телефона (например, +79991112233): ";
+        std::cout << "Введите номер телефона (например, +79991112233): ";
 
-            std::cin >> phone_number;
+        std::cin >> phone_number;
 
-            sendQuery(td::td_api::make_object<td::td_api::setAuthenticationPhoneNumber>(phone_number, nullptr));
+        sendQuery(td::td_api::make_object<td::td_api::setAuthenticationPhoneNumber>(phone_number, nullptr));
 
-            break;
+        break;
 
-        }
+    }
 
-        case td::td_api::authorizationStateWaitCode::ID: {
+    case td::td_api::authorizationStateWaitCode::ID: {
 
-            std::string code;
+        std::string code;
 
-            std::cout << "Введите код подтверждения из Telegram: ";
+        std::cout << "Введите код подтверждения из Telegram: ";
 
-            std::cin >> code;
+        std::cin >> code;
 
-            sendQuery(td::td_api::make_object<td::td_api::checkAuthenticationCode>(code));
+        sendQuery(td::td_api::make_object<td::td_api::checkAuthenticationCode>(code));
 
-            break;
+        break;
 
-        }
+    }
 
-        case td::td_api::authorizationStateReady::ID: std::cout << "Авторизация успешна! Юзербот готов к работе." << std::endl; break;
+    case td::td_api::authorizationStateReady::ID:
+        std::cout << "Авторизация успешна! Юзербот готов к работе." << std::endl;
+        break;
 
-        case td::td_api::authorizationStateClosing::ID: std::cout << "Закрытие сессии..." << std::endl; break;
+    case td::td_api::authorizationStateClosing::ID:
+        std::cout << "Закрытие сессии..." << std::endl;
+        break;
 
-        case td::td_api::authorizationStateClosed::ID: std::cout << "Сессия закрыта." << std::endl; _need_restart = 1; break;
+    case td::td_api::authorizationStateClosed::ID:
+        std::cout << "Сессия закрыта." << std::endl;
+        _need_restart = 1;
+        break;
 
-        default: std::cout << "Неизвестная операция"; break;
+    default:
+        std::cout << "Неизвестная операция";
+        break;
 
     }
 
@@ -136,29 +170,37 @@ void Maru::setupCommands() {
 
     registerCommand(".ping", [this](const td::td_api::message& msg, const std::string& args) {
 
-        auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
+        if(msg.is_outgoing_) {
 
-        formatted_text->text_ = "pong";
+            auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
 
-        auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
+            formatted_text->text_ = "pong";
 
-        sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
+            auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
 
-            msg.chat_id_, td::td_api::object_ptr<td::td_api::MessageTopic>(),
+            sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
 
-            td::td_api::object_ptr<td::td_api::InputMessageReplyTo>(), td::td_api::object_ptr<td::td_api::messageSendOptions>(),
+                          msg.chat_id_, td::td_api::object_ptr<td::td_api::MessageTopic>(),
 
-            td::td_api::object_ptr<td::td_api::ReplyMarkup>(), std::move(input_content)
+                          td::td_api::object_ptr<td::td_api::InputMessageReplyTo>(), td::td_api::object_ptr<td::td_api::messageSendOptions>(),
 
-        ));
+                          td::td_api::object_ptr<td::td_api::ReplyMarkup>(), std::move(input_content)
+
+                      ));
+
+        }
 
     });
 
-    registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) { if(msg.is_outgoing_) editMessageText(msg.chat_id_, msg.id_, "Hello World!"); });
+    registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) {
+        if(msg.is_outgoing_) editMessageText(msg.chat_id_, msg.id_, "Hello World!");
+    });
 
 }
 
-void Maru::registerCommand(const std::string& name, commandHandler handler) { _commands[name] = handler; }
+void Maru::registerCommand(const std::string& name, commandHandler handler) {
+    _commands[name] = handler;
+}
 
 void Maru::editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text) {
 
@@ -170,15 +212,15 @@ void Maru::editMessageText(int64_t chat_id, int64_t message_id, const std::strin
 
     sendQuery(td::td_api::make_object<td::td_api::editMessageText>(
 
-        chat_id,
+                  chat_id,
 
-        message_id,
+                  message_id,
 
-        td::td_api::object_ptr<td::td_api::ReplyMarkup>(),
+                  td::td_api::object_ptr<td::td_api::ReplyMarkup>(),
 
-        std::move(input_content)
+                  std::move(input_content)
 
-    ));
+              ));
 
 }
 
