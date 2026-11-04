@@ -154,7 +154,7 @@ void Maru::setupCommands() {
 
     });
 
-    registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) { editMessageText(msg.chat_id_, msg.id_, "Hello World!"); });
+    registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) { if(msg.is_outgoing_) editMessageText(msg.chat_id_, msg.id_, "Hello World!"); });
 
 }
 
