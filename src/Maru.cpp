@@ -309,6 +309,75 @@ void Maru::setupCommands() {
     });
 
 
+    registerCommand(".inf", [this](const td::td_api::message& msg, const std::string& args) {
+
+        if (!msg.is_outgoing_) return;
+
+        int64_t chat_id = msg.chat_id_;
+
+        int64_t my_msg_id = msg.id_;
+
+        if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
+
+            const auto& reply_info_base = msg.reply_to_;
+
+            auto& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*reply_info_base);
+
+            int64_t reply_message_id = reply_info.message_id_;
+
+            sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id, my_msg_id](td::td_api::object_ptr<td::td_api::Object> response) {
+
+                if (response->get_id() == td::td_api::message::ID) {
+
+                    td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
+
+                    if (replied_msg->sender_id_ && replied_msg->sender_id_->get_id() == td::td_api::messageSenderUser::ID) {
+
+                        auto& sender_user = static_cast<const td::td_api::messageSenderUser&>(*replied_msg->sender_id_);
+
+                        int64_t target_user_id = sender_user.user_id_;
+
+                        sendQuery(td::td_api::make_object<td::td_api::getUser>(target_user_id), [this, chat_id, my_msg_id](td::td_api::object_ptr<td::td_api::Object> user_response) {
+
+                            if (user_response->get_id() == td::td_api::user::ID) {
+
+                                td::td_api::object_ptr<td::td_api::user> user_info = td::move_tl_object_as<td::td_api::user>(user_response);
+
+                                std::string first_name = user_info->first_name_;
+
+                                int64_t user_id = user_info->id_;
+
+
+                                std::string result = "Информация о пользователе:\nИмя: " + first_name + "\nID: " + std::to_string(user_id);
+
+                                editMessageText(chat_id, my_msg_id, result);
+
+                                return;
+
+                            }
+
+                            editMessageText(chat_id, my_msg_id, "[Ошибка]: Не удалось загрузить карточку пользователя.");
+
+                        });
+
+                        return;
+
+                    }
+
+                }
+
+                editMessageText(chat_id, my_msg_id, "[Ошибка]: Не удалось получить исходное сообщение или его автор — не пользователь.");
+
+            });
+
+            return;
+
+        }
+
+        editMessageText(chat_id, my_msg_id, "[Ошибка]: Команду необходимо вызывать в ответ на сообщение пользователя.");
+
+    });
+
 
 }
 
