@@ -9,8 +9,14 @@
 #include <functional>
 #include <iostream>
 #include <unordered_map>
+#include <fstream>
+#include <sstream>
 
 class Maru {
+
+    int32_t API_ID;
+
+    std::string API_HASH;
 
     std::unique_ptr<td::ClientManager> _client_manager;
 
@@ -35,6 +41,8 @@ class Maru {
     void editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text);
 
     std::unordered_map<std::string, commandHandler> _commands;
+
+    bool loadConfig(const std::string& filename);
 
 public:
 

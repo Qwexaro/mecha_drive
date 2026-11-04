@@ -55,3 +55,5 @@ target_link_libraries(mecha_drive PRIVATE
     dl
 )
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.txt ${CMAKE_CURRENT_BINARY_DIR}/config.txt COPYONLY)
+

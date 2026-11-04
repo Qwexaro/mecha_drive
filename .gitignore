@@ -23,3 +23,5 @@ Thumbs.db
 bin/
 
 obj/
+
+config.txt

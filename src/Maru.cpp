@@ -1,16 +1,66 @@
 #include "Maru.h"
 
-const int32_t API_ID = API_ID;
-
-const std::string API_HASH = API_HASH;
-
-Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()}, _need_restart{0} {
+Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()}, _need_restart{0}, API_HASH{""}, API_ID{0} {
     setupCommands();
+}
+
+bool Maru::loadConfig(const std::string& filename) {
+
+    std::ifstream infile(filename);
+
+    if (!infile.is_open()) {
+
+        std::cerr << "[Ошибка]: Не удалось открыть файл конфигурации " << filename << std::endl;
+
+        std::cerr << "Убедитесь, что файл создан и лежит в рабочей директории бота." << std::endl;
+
+        return false;
+
+    }
+
+    std::string line;
+
+    while (std::getline(infile, line)) {
+
+        if (line.empty() || line[0] == '#') continue;
+
+        std::size_t delimiter_pos = line.find('=');
+
+        if (delimiter_pos == std::string::npos) continue;
+
+        std::string key = line.substr(0, delimiter_pos);
+
+        std::string value = line.substr(delimiter_pos + 1);
+
+        if (key == "API_ID") API_ID = std::stoi(value);
+
+        else if (key == "API_HASH") API_HASH = value;
+
+    }
+
+    if (API_ID == 0 || API_HASH.empty()) {
+
+        std::cerr << "[Ошибка]: Файл конфигурации заполнен некорректно!" << std::endl;
+
+        return false;
+
+    }
+
+    return true;
+
 }
 
 void Maru::run() {
 
-    std::cout << "Юзербот запущен. Инициализация сессии..." << std::endl;
+    if (!loadConfig("config.txt")) {
+
+        std::cerr << "Критическая ошибка. Завершение работы юзербота." << std::endl;
+
+        return;
+
+    }
+
+    std::cout << "Конфигурация успешно загружена." << std::endl << "Юзербот запущен. Инициализация сессии..." << std::endl;
 
     auto get_version_query = td::td_api::make_object<td::td_api::getOption>("version");
 
@@ -20,21 +70,10 @@ void Maru::run() {
 
     while (_need_restart == 0) {
 
-        try {
+        auto response = _client_manager->receive(10.0);
 
-            auto response = _client_manager->receive(10.0);
+        if (response.object) processResponse(std::move(response));
 
-            if (response.object) processResponse(std::move(response));
-
-        }
-
-        catch (const std::exception& e) {
-            std::cerr << "[Критическая системная ошибка]: " << e.what() << std::endl;
-        }
-
-        catch (...) {
-            std::cerr << "[Неизвестный сбой в цикле событий]" << std::endl;
-        }
     }
 
 }
