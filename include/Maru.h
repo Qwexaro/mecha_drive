@@ -14,9 +14,9 @@ class Maru {
 
     std::unique_ptr<td::ClientManager> _client_manager;
 
-    int32_t _client_id = 0;
+    int32_t _client_id;
 
-    int _need_restart = 0;
+    int _need_restart;
 
     void sendQuery(td::td_api::object_ptr<td::td_api::Function> f, std::function<void(td::td_api::object_ptr<td::td_api::Object>)> handler = nullptr);
 
@@ -26,15 +26,15 @@ class Maru {
 
     void onNewMessage(td::td_api::object_ptr<td::td_api::message> message);
 
-    void registerCommand(const std::string& name, CommandHandler handler);
+    using commandHandler = std::function<void(const td::td_api::message&, const std::string&)>;
+
+    void registerCommand(const std::string& name, commandHandler handler);
 
     void setupCommands();
 
     void editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text);
 
-    using commandHandler = std::function<void(const td::td_api::message&, const std::string&)>;
-
-    std::unordered_map<std::string, CommandHandler> _commands;
+    std::unordered_map<std::string, commandHandler> _commands;
 
 public:
 

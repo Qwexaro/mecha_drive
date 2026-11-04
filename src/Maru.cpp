@@ -4,7 +4,7 @@ const int32_t API_ID = API_ID;
 
 const std::string API_HASH = API_HASH;
 
-Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()} { setupCommands() }
+Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()}, _need_restart{0} { setupCommands(); }
 
 void Maru::run() {
 
@@ -154,11 +154,11 @@ void Maru::setupCommands() {
 
     });
 
-    registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) { editMessageText(msg.chat_id_, msg.id_, "<i>**Hello World!**</i>"); });
+    registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) { editMessageText(msg.chat_id_, msg.id_, "Hello World!"); });
 
 }
 
-void Maru::registerCommand(const std::string& name, CommandHandler handler) { _commands[name] = handler; }
+void Maru::registerCommand(const std::string& name, commandHandler handler) { _commands[name] = handler; }
 
 void Maru::editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text) {
 
