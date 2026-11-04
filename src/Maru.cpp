@@ -4,7 +4,7 @@ const int32_t API_ID = API_ID;
 
 const std::string API_HASH = API_HASH;
 
-Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()} {}
+Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()} { setupCommands() }
 
 void Maru::run() {
 
@@ -132,6 +132,56 @@ void Maru::onAuthorizationStateUpdate(td::td_api::object_ptr<td::td_api::Authori
 
 }
 
+void Maru::setupCommands() {
+
+    registerCommand(".ping", [this](const td::td_api::message& msg, const std::string& args) {
+
+        auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
+
+        formatted_text->text_ = "pong";
+
+        auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
+
+        sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
+
+            msg.chat_id_, td::td_api::object_ptr<td::td_api::MessageTopic>(),
+
+            td::td_api::object_ptr<td::td_api::InputMessageReplyTo>(), td::td_api::object_ptr<td::td_api::messageSendOptions>(),
+
+            td::td_api::object_ptr<td::td_api::ReplyMarkup>(), std::move(input_content)
+
+        ));
+
+    });
+
+    registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) { editMessageText(msg.chat_id_, msg.id_, "<i>**Hello World!**</i>"); });
+
+}
+
+void Maru::registerCommand(const std::string& name, CommandHandler handler) { _commands[name] = handler; }
+
+void Maru::editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text) {
+
+    auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
+
+    formatted_text->text_ = new_text;
+
+    auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, true);
+
+    sendQuery(td::td_api::make_object<td::td_api::editMessageText>(
+
+        chat_id,
+
+        message_id,
+
+        td::td_api::object_ptr<td::td_api::ReplyMarkup>(),
+
+        std::move(input_content)
+
+    ));
+
+}
+
 void Maru::onNewMessage(td::td_api::object_ptr<td::td_api::message> message) {
 
     if (message->content_->get_id() == td::td_api::messageText::ID) {
@@ -140,33 +190,15 @@ void Maru::onNewMessage(td::td_api::object_ptr<td::td_api::message> message) {
 
         std::string text = text_content.text_->text_;
 
-        if (text == "!ping") {
+        size_t space_pos = text.find(' ');
 
-            std::cout << "Получена команда !ping в чате " << message->chat_id_ << ". Отвечаю..." << std::endl;
+        std::string cmd = (space_pos == std::string::npos) ? text : text.substr(0, space_pos);
 
-            auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
+        std::string args = (space_pos == std::string::npos) ? "" : text.substr(space_pos + 1);
 
-            formatted_text->text_ = "pong";
+        auto it = _commands.find(cmd);
 
-            auto input_message_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
-
-            sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
-
-                message->chat_id_,
-
-                td::td_api::object_ptr<td::td_api::MessageTopic>(),
-
-                td::td_api::object_ptr<td::td_api::InputMessageReplyTo>(),
-
-                td::td_api::object_ptr<td::td_api::messageSendOptions>(),
-
-                td::td_api::object_ptr<td::td_api::ReplyMarkup>(),
-
-                std::move(input_message_content)
-
-            ));
-
-        }
+        if (it != _commands.end()) it->second(*message, args);
 
     }
 
