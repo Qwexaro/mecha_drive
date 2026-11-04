@@ -186,6 +186,23 @@ void Maru::onAuthorizationStateUpdate(td::td_api::object_ptr<td::td_api::Authori
 
     }
 
+    case td::td_api::authorizationStateWaitPassword::ID: {
+
+        std::string password;
+
+        std::cout << "На аккаунте включен облачный пароль.\nВведите ваш 2FA пароль: ";
+
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        std::getline(std::cin, password);
+
+        sendQuery(td::td_api::make_object<td::td_api::checkAuthenticationPassword>(password));
+
+        break;
+
+    }
+
+
     case td::td_api::authorizationStateWaitCode::ID: {
 
         std::string code;
@@ -201,20 +218,29 @@ void Maru::onAuthorizationStateUpdate(td::td_api::object_ptr<td::td_api::Authori
     }
 
     case td::td_api::authorizationStateReady::ID:
+
         std::cout << "Авторизация успешна! Юзербот готов к работе." << std::endl;
+
         break;
 
     case td::td_api::authorizationStateClosing::ID:
+
         std::cout << "Закрытие сессии..." << std::endl;
+
         break;
 
     case td::td_api::authorizationStateClosed::ID:
+
         std::cout << "Сессия закрыта." << std::endl;
+
         _need_restart = 1;
+
         break;
 
     default:
+
         std::cout << "Неизвестная операция";
+
         break;
 
     }
