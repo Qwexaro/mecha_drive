@@ -78,12 +78,13 @@ void Maru::run() {
 
 }
 
-
 void Maru::sendQuery(td::td_api::object_ptr<td::td_api::Function> f, std::function<void(td::td_api::object_ptr<td::td_api::Object>)> handler) {
 
     static std::uint64_t current_query_id = 1;
 
     std::uint64_t query_id = current_query_id++;
+
+    if (handler) _handlers[query_id] = std::move(handler);
 
     _client_manager->send(_client_id, query_id, std::move(f));
 
@@ -101,17 +102,32 @@ void Maru::processResponse(td::ClientManager::Response response) {
 
     }
 
-    if (response.object->get_id() == td::td_api::updateAuthorizationState::ID) {
+    if (response.request_id == 0) {
 
-        auto update = td::move_tl_object_as<td::td_api::updateAuthorizationState>(response.object);
+        if (response.object->get_id() == td::td_api::updateAuthorizationState::ID) {
 
-        onAuthorizationStateUpdate(std::move(update->authorization_state_));
+            auto update = td::move_tl_object_as<td::td_api::updateAuthorizationState>(response.object);
 
-    } else if (response.object->get_id() == td::td_api::updateNewMessage::ID) {
+            onAuthorizationStateUpdate(std::move(update->authorization_state_));
 
-        auto update = td::move_tl_object_as<td::td_api::updateNewMessage>(response.object);
+        } else if (response.object->get_id() == td::td_api::updateNewMessage::ID) {
 
-        onNewMessage(std::move(update->message_));
+            auto update = td::move_tl_object_as<td::td_api::updateNewMessage>(response.object);
+
+            onNewMessage(std::move(update->message_));
+
+        }
+    } else {
+
+        auto it = _handlers.find(response.request_id);
+
+        if (it != _handlers.end()) {
+
+            it->second(std::move(response.object));
+
+            _handlers.erase(it);
+
+        }
 
     }
 
@@ -209,31 +225,90 @@ void Maru::setupCommands() {
 
     registerCommand(".ping", [this](const td::td_api::message& msg, const std::string& args) {
 
-        if(msg.is_outgoing_) {
+        if(!msg.is_outgoing_) return;
 
-            auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
+        auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
 
-            formatted_text->text_ = "pong";
+        formatted_text->text_ = "pong";
 
-            auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
+        auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
 
-            sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
+        sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
 
-                          msg.chat_id_, td::td_api::object_ptr<td::td_api::MessageTopic>(),
+                      msg.chat_id_, td::td_api::object_ptr<td::td_api::MessageTopic>(),
 
-                          td::td_api::object_ptr<td::td_api::InputMessageReplyTo>(), td::td_api::object_ptr<td::td_api::messageSendOptions>(),
+                      td::td_api::object_ptr<td::td_api::InputMessageReplyTo>(), td::td_api::object_ptr<td::td_api::messageSendOptions>(),
 
-                          td::td_api::object_ptr<td::td_api::ReplyMarkup>(), std::move(input_content)
+                      td::td_api::object_ptr<td::td_api::ReplyMarkup>(), std::move(input_content)
 
-                      ));
+                  ));
 
-        }
+
 
     });
 
     registerCommand(".hi", [this](const td::td_api::message& msg, const std::string& args) {
         if(msg.is_outgoing_) editMessageText(msg.chat_id_, msg.id_, "Hello World!");
     });
+
+    registerCommand(".id", [this](const td::td_api::message& msg, const std::string& args) {
+
+        if (!msg.is_outgoing_) return;
+
+        int64_t chat_id = msg.chat_id_;
+
+        int64_t my_msg_id = msg.id_;
+
+        if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
+
+            const auto& reply_info_base = msg.reply_to_;
+
+            auto& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*reply_info_base);
+
+            int64_t reply_message_id = reply_info.message_id_;
+
+            sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id, my_msg_id](td::td_api::object_ptr<td::td_api::Object> response) {
+
+                if (response->get_id() == td::td_api::message::ID) {
+
+                    td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
+
+                    if (replied_msg->forward_info_) {
+
+                        td::td_api::object_ptr<td::td_api::messageForwardInfo> f_info = std::move(replied_msg->forward_info_);
+
+                        if (f_info->origin_ && f_info->origin_->get_id() == td::td_api::messageOriginUser::ID) {
+
+                            td::td_api::object_ptr<td::td_api::messageOriginUser> origin_user =
+                                td::move_tl_object_as<td::td_api::messageOriginUser>(f_info->origin_);
+
+                            int64_t replied_to_id = origin_user->sender_user_id_;
+
+                            std::string result = "Chat ID: " + std::to_string(chat_id) + ", Replied To ID: " + std::to_string(replied_to_id);
+
+                            editMessageText(chat_id, my_msg_id, result);
+
+                            return;
+
+                        }
+
+                    }
+
+                }
+
+                editMessageText(chat_id, my_msg_id, "Chat ID: " + std::to_string(chat_id));
+
+            });
+
+            return;
+
+        }
+
+        editMessageText(chat_id, my_msg_id, "Chat ID: " + std::to_string(chat_id));
+
+    });
+
+
 
 }
 

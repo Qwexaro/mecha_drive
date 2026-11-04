@@ -42,6 +42,8 @@ class Maru {
 
     std::unordered_map<std::string, commandHandler> _commands;
 
+    std::unordered_map<uint64_t, std::function<void(td::td_api::object_ptr<td::td_api::Object>)>> _handlers;
+
     bool loadConfig(const std::string& filename);
 
 public:
