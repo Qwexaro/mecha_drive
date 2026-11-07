@@ -30,9 +30,9 @@ This section serves as the active roadmap and feature tracker for Maru. Items ma
 ### 📥 Iris-Style Input Parser
 - [x] **Basic Prefix Management:** Automated cutting of leading dots (`.`) and slashes (`/`).
 - [x] **Argument Splitting:** Basic logic to separate the core command from trailing arguments via spaces.
-- [ ] **Beta: Case-Insensitivity & UTF-8 Normalization** *(In Progress)*
-  - [ ] Implement robust multi-byte character scanning to handle upper/lowercase Cyrillic (`А-Я`) safely.
-  - [ ] Normalize raw command tokens before matching against the internal command map.
+- [x] **Beta: Case-Insensitivity & UTF-8 Normalization** *(In Progress)*
+  - [x] Implement robust multi-byte character scanning to handle upper/lowercase Cyrillic (`А-Я`) safely.
+  - [x] Normalize raw command tokens before matching against the internal command map.
 
 ### 🛡️ Analytics & Weekly Statistics
 - [x] **Sliding Window Engine:** Dynamically tracks user messaging history using Unix-timestamps.
