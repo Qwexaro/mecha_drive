@@ -12,7 +12,6 @@
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
  */
 
-
 #include "Maru.h"
 
 Maru::Maru(): _client_manager{std::make_unique<td::ClientManager>()}, _client_id{_client_manager->create_client_id()}, _need_restart{0}, API_HASH{""}, API_ID{0} {
@@ -25,9 +24,7 @@ bool Maru::loadConfig(const std::string& filename) {
 
     if (!infile.is_open()) {
 
-        std::cerr << "[Ошибка]: Не удалось открыть файл конфигурации " << filename << std::endl;
-
-        std::cerr << "Убедитесь, что файл создан и лежит в рабочей директории бота." << std::endl;
+        std::cerr << "[Ошибка]: Не удалось открыть файл конфигурации " << filename << std::endl << "Убедитесь, что файл создан и лежит в рабочей директории бота." << std::endl;
 
         return false;
 
@@ -139,313 +136,13 @@ void Maru::sendQuery(td::td_api::object_ptr<td::td_api::Function> f, std::functi
 
 }
 
-void Maru::processResponse(td::ClientManager::Response response) {
+void Maru::editMessageText(int64_t chat_id, int64_t message_id, std::string new_text) {
 
-    if (response.object->get_id() == td::td_api::error::ID) {
+    td::td_api::object_ptr<td::td_api::formattedText> formatted_text = td::td_api::make_object<td::td_api::formattedText>();
 
-        auto error = td::move_tl_object_as<td::td_api::error>(response.object);
+    formatted_text->text_ = std::move(new_text);
 
-        std::cerr << "[Telegram API Error] Код: " << error->code_  << " | Описание: " << error->message_ << std::endl;
-
-        return;
-
-    }
-
-    if (response.request_id == 0) {
-
-        if (response.object->get_id() == td::td_api::updateAuthorizationState::ID) {
-
-            auto update = td::move_tl_object_as<td::td_api::updateAuthorizationState>(response.object);
-
-            onAuthorizationStateUpdate(std::move(update->authorization_state_));
-
-        } else if (response.object->get_id() == td::td_api::updateNewMessage::ID) {
-
-            auto update = td::move_tl_object_as<td::td_api::updateNewMessage>(response.object);
-
-            onNewMessage(std::move(update->message_));
-
-        }
-    } else {
-
-        auto it = _handlers.find(response.request_id);
-
-        if (it != _handlers.end()) {
-
-            it->second(std::move(response.object));
-
-            _handlers.erase(it);
-
-        }
-
-    }
-
-}
-
-
-void Maru::onAuthorizationStateUpdate(td::td_api::object_ptr<td::td_api::AuthorizationState> state) {
-
-    switch (state->get_id()) {
-
-    case td::td_api::authorizationStateWaitTdlibParameters::ID: {
-
-        auto params = td::td_api::make_object<td::td_api::setTdlibParameters>();
-
-        params->use_test_dc_ = false;
-
-        params->database_directory_ = "tdlib_session";
-
-        params->files_directory_ = "tdlib_files";
-
-        params->use_file_database_ = true;
-
-        params->use_chat_info_database_ = true;
-
-        params->use_message_database_ = true;
-
-        params->use_secret_chats_ = false;
-
-        params->api_id_ = API_ID;
-
-        params->api_hash_ = API_HASH;
-
-        params->system_language_code_ = "en";
-
-        params->device_model_ = "C++ UserBot (Maru)";
-
-        params->application_version_ = "1.0";
-
-        sendQuery(std::move(params));
-
-        break;
-
-    }
-
-    case td::td_api::authorizationStateWaitPhoneNumber::ID: {
-
-        std::string phone_number;
-
-        std::cout << "Введите номер телефона (например, +79991112233): ";
-
-        std::cin >> phone_number;
-
-        sendQuery(td::td_api::make_object<td::td_api::setAuthenticationPhoneNumber>(phone_number, nullptr));
-
-        break;
-
-    }
-
-    case td::td_api::authorizationStateWaitPassword::ID: {
-
-        std::string password;
-
-        std::cout << "На аккаунте включен облачный пароль.\nВведите ваш 2FA пароль: ";
-
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-        std::getline(std::cin, password);
-
-        sendQuery(td::td_api::make_object<td::td_api::checkAuthenticationPassword>(password));
-
-        break;
-
-    }
-
-
-    case td::td_api::authorizationStateWaitCode::ID: {
-
-        std::string code;
-
-        std::cout << "Введите код подтверждения из Telegram: ";
-
-        std::cin >> code;
-
-        sendQuery(td::td_api::make_object<td::td_api::checkAuthenticationCode>(code));
-
-        break;
-
-    }
-
-    case td::td_api::authorizationStateReady::ID:
-
-        std::cout << "Авторизация успешна! Юзербот готов к работе." << std::endl;
-
-        break;
-
-    case td::td_api::authorizationStateClosing::ID:
-
-        std::cout << "Закрытие сессии..." << std::endl;
-
-        break;
-
-    case td::td_api::authorizationStateClosed::ID:
-
-        std::cout << "Сессия закрыта." << std::endl;
-
-        _need_restart = 1;
-
-        break;
-
-    default:
-
-        std::cout << "Неизвестная операция";
-
-        break;
-
-    }
-
-}
-
-void Maru::setupCommands() {
-
-    std::function<void(const td::td_api::message&, const std::string&)> ping_logic = [this](const td::td_api::message& msg, const std::string& args) {
-
-        sendTextMessage(msg.chat_id_, "ПОНГ \U0001F3D3");
-
-    };
-
-    registerCommand("ping", ping_logic);
-
-    registerCommand("пинг", ping_logic);
-
-    std::function<void(const td::td_api::message&, const std::string&)> inf_logic = [this](const td::td_api::message& msg, const std::string& args) {
-
-        int64_t chat_id = msg.chat_id_;
-
-        if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
-
-            const td::td_api::messageReplyToMessage& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*msg.reply_to_);
-
-            int64_t reply_message_id = reply_info.message_id_;
-
-            sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> response) {
-
-                if (response->get_id() != td::td_api::message::ID) {
-
-                    sendTextMessage(chat_id, "\u274C Ошибка получения оригинального сообщения.");
-
-                    return;
-
-                }
-
-                td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
-
-                if (replied_msg->sender_id_ && replied_msg->sender_id_->get_id() == td::td_api::messageSenderUser::ID) {
-
-                    const td::td_api::messageSenderUser& sender_user = static_cast<const td::td_api::messageSenderUser&>(*replied_msg->sender_id_);
-
-                    int64_t target_user_id = sender_user.user_id_;
-
-                    sendQuery(td::td_api::make_object<td::td_api::getUser>(target_user_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> user_response) {
-
-                        if (user_response->get_id() == td::td_api::user::ID) {
-
-                            td::td_api::object_ptr<td::td_api::user> user_info = td::move_tl_object_as<td::td_api::user>(user_response);
-
-                            std::string result = "\u2139 Информация о пользователе:\nИмя: " + user_info->first_name_ + "\nID: " + std::to_string(user_info->id_);
-
-                            sendTextMessage(chat_id, result);
-
-                        } else {
-
-                            sendTextMessage(chat_id, "\u274C Не удалось загрузить данные пользователя.");
-
-                        }
-
-                    });
-
-                } else {
-
-                    sendTextMessage(chat_id, "\u274C Сообщение отправлено не пользователем (возможно, это канал или группа).");
-
-                }
-
-            });
-
-            return;
-
-        }
-
-        sendTextMessage(chat_id, "\u274C Вызовите команду в ответ на сообщение пользователя.");
-
-    };
-
-    registerCommand("inf", inf_logic);
-
-    registerCommand("info", inf_logic);
-
-    registerCommand("инф", inf_logic);
-
-    registerCommand("инфо", inf_logic);
-
-    std::function<void(const td::td_api::message&, const std::string&)> id_logic = [this](const td::td_api::message& msg, const std::string& args) {
-
-        int64_t chat_id = msg.chat_id_;
-
-        if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
-
-            const td::td_api::messageReplyToMessage& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*msg.reply_to_);
-
-            int64_t reply_message_id = reply_info.message_id_;
-
-            sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> response) {
-
-                if (response->get_id() == td::td_api::message::ID) {
-
-                    td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
-
-                    if (replied_msg->forward_info_ && replied_msg->forward_info_->origin_) {
-
-                        if (replied_msg->forward_info_->origin_->get_id() == td::td_api::messageOriginUser::ID) {
-
-                            const td::td_api::messageOriginUser& origin_user = static_cast<const td::td_api::messageOriginUser&>(*replied_msg->forward_info_->origin_);
-
-                            int64_t replied_to_id = origin_user.sender_user_id_;
-
-                            std::string result = "\U0001F194 Чат: " + std::to_string(chat_id) + "\n\U0001F464 Отправитель пересланного: " + std::to_string(replied_to_id);
-
-                            sendTextMessage(chat_id, result);
-
-                            return;
-
-                        }
-
-                    }
-
-                }
-
-                sendTextMessage(chat_id, "\U0001F194 ID Чата: " + std::to_string(chat_id));
-
-            });
-
-            return;
-
-        }
-
-        sendTextMessage(chat_id, "\U0001F194 ID Чата: " + std::to_string(chat_id));
-
-    };
-
-    registerCommand("id", id_logic);
-
-    registerCommand("ид", id_logic);
-
-}
-
-
-void Maru::registerCommand(const std::string& name, commandHandler handler) {
-
-    _commands[name] = handler;
-
-}
-
-void Maru::editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text) {
-
-    auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
-
-    formatted_text->text_ = new_text;
-
-    auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, true);
+    td::td_api::object_ptr<td::td_api::inputMessageText> input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, true);
 
     sendQuery(td::td_api::make_object<td::td_api::editMessageText>(
 
@@ -461,43 +158,13 @@ void Maru::editMessageText(int64_t chat_id, int64_t message_id, const std::strin
 
 }
 
-void Maru::onNewMessage(td::td_api::object_ptr<td::td_api::message> message) {
+void Maru::sendTextMessage(int64_t chat_id, std::string text) {
 
-    if (message->content_->get_id() == td::td_api::messageText::ID) {
+    td::td_api::object_ptr<td::td_api::formattedText> formatted_text = td::td_api::make_object<td::td_api::formattedText>();
 
-        auto& text_content = static_cast<const td::td_api::messageText&>(*message->content_);
+    formatted_text->text_ = std::move(text);
 
-        std::string text = text_content.text_->text_;
-
-        if (text.empty()) return;
-
-        size_t space_pos = text.find(' ');
-
-        std::string raw_cmd = (space_pos == std::string::npos) ? text : text.substr(0, space_pos);
-
-        std::string args = (space_pos == std::string::npos) ? "" : text.substr(space_pos + 1);
-
-        if (raw_cmd[0] == '.' || raw_cmd[0] == '/') raw_cmd = raw_cmd.substr(1);
-
-        std::string clean_cmd = "";
-
-        for (char c : raw_cmd) clean_cmd += std::tolower(static_cast<unsigned char>(c));
-
-        auto it = _commands.find(clean_cmd);
-
-        if (it != _commands.end()) it->second(*message, args);
-
-    }
-
-}
-
-void Maru::sendTextMessage(int64_t chat_id, const std::string& text) {
-
-    auto formatted_text = td::td_api::make_object<td::td_api::formattedText>();
-
-    formatted_text->text_ = text;
-
-    auto input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
+    td::td_api::object_ptr<td::td_api::inputMessageText> input_content = td::td_api::make_object<td::td_api::inputMessageText>(std::move(formatted_text), nullptr, false);
 
     sendQuery(td::td_api::make_object<td::td_api::sendMessage>(
 

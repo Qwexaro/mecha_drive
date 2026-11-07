@@ -26,6 +26,7 @@
 #include <fstream>
 #include <sstream>
 #include <limits>
+#include <map>
 
 class Maru {
 
@@ -47,17 +48,15 @@ class Maru {
 
     void onNewMessage(td::td_api::object_ptr<td::td_api::message> message);
 
-    using commandHandler = std::function<void(const td::td_api::message&, const std::string&)>;
-
-    void registerCommand(const std::string& name, commandHandler handler);
+    void registerCommand(std::string name, std::function<void(const td::td_api::message&, const std::string&)> handler);
 
     void setupCommands();
 
-    void sendTextMessage(int64_t chat_id, const std::string& text);
+    void sendTextMessage(int64_t chat_id, std::string text);
 
-    void editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text);
+    void editMessageText(int64_t chat_id, int64_t message_id, std::string new_text);
 
-    std::unordered_map<std::string, commandHandler> _commands;
+    std::unordered_map<std::string, std::function<void(const td::td_api::message&, const std::string&)>> _commands;
 
     std::unordered_map<uint64_t, std::function<void(td::td_api::object_ptr<td::td_api::Object>)>> _handlers;
 

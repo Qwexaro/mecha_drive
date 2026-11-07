@@ -32,7 +32,8 @@ file(GLOB_RECURSE PROJECT_SOURCES
 add_executable(mecha_drive 
     main.cpp 
     src/Maru.cpp 
-    include/Maru.h
+    src/MaruAuth.cpp 
+    src/MaruCommands.cpp
 )
 
 
