@@ -37,6 +37,8 @@ bool Maru::loadConfig(const std::string& filename) {
 
     while (std::getline(infile, line)) {
 
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+
         if (line.empty() || line[0] == '#') continue;
 
         std::size_t delimiter_pos = line.find('=');
@@ -47,7 +49,39 @@ bool Maru::loadConfig(const std::string& filename) {
 
         std::string value = line.substr(delimiter_pos + 1);
 
-        if (key == "API_ID") API_ID = std::stoi(value);
+        std::size_t key_first = key.find_first_not_of(" \t");
+
+        if (key_first != std::string::npos) {
+
+            std::size_t key_last = key.find_last_not_of(" \t");
+
+            key = key.substr(key_first, (key_last - key_first + 1));
+
+        }
+
+        std::size_t val_first = value.find_first_not_of(" \t");
+
+        if (val_first != std::string::npos) {
+
+            std::size_t val_last = value.find_last_not_of(" \t");
+
+            value = value.substr(val_first, (val_last - val_first + 1));
+
+        }
+
+        if (key == "API_ID") {
+
+            try {
+
+                API_ID = std::stoi(value);
+
+            } catch (...) {
+
+                std::cerr << "[Ошибка]: Не удалось распарсить API_ID как число!" << std::endl;
+
+            }
+
+        }
 
         else if (key == "API_HASH") API_HASH = value;
 
@@ -264,68 +298,67 @@ void Maru::onAuthorizationStateUpdate(td::td_api::object_ptr<td::td_api::Authori
 
 void Maru::setupCommands() {
 
-    auto ping_logic = [this](const td::td_api::message& msg, const std::string& args) {
-        sendTextMessage(msg.chat_id_, "ПОНГ 🏓");
+    std::function<void(const td::td_api::message&, const std::string&)> ping_logic = [this](const td::td_api::message& msg, const std::string& args) {
+
+        sendTextMessage(msg.chat_id_, "ПОНГ \U0001F3D3");
+
     };
 
     registerCommand("ping", ping_logic);
 
     registerCommand("пинг", ping_logic);
 
-
-    auto inf_logic = [this](const td::td_api::message& msg, const std::string& args) {
+    std::function<void(const td::td_api::message&, const std::string&)> inf_logic = [this](const td::td_api::message& msg, const std::string& args) {
 
         int64_t chat_id = msg.chat_id_;
 
         if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
 
-            const auto& reply_info_base = msg.reply_to_;
-
-            auto& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*reply_info_base);
+            const td::td_api::messageReplyToMessage& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*msg.reply_to_);
 
             int64_t reply_message_id = reply_info.message_id_;
 
             sendQuery(td::td_api::make_object<td::td_api::getMessage>(chat_id, reply_message_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> response) {
 
-                if (response->get_id() == td::td_api::message::ID) {
+                if (response->get_id() != td::td_api::message::ID) {
 
-                    td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
+                    sendTextMessage(chat_id, "\u274C Ошибка получения оригинального сообщения.");
 
-                    if (replied_msg->sender_id_ && replied_msg->sender_id_->get_id() == td::td_api::messageSenderUser::ID) {
-
-                        auto& sender_user = static_cast<const td::td_api::messageSenderUser&>(*replied_msg->sender_id_);
-
-                        int64_t target_user_id = sender_user.user_id_;
-
-                        sendQuery(td::td_api::make_object<td::td_api::getUser>(target_user_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> user_response) {
-
-                            if (user_response->get_id() == td::td_api::user::ID) {
-
-                                td::td_api::object_ptr<td::td_api::user> user_info = td::move_tl_object_as<td::td_api::user>(user_response);
-
-                                std::string first_name = user_info->first_name_;
-
-                                int64_t user_id = user_info->id_;
-
-                                std::string result = "ℹ️ Информация о пользователе:\nИмя: " + first_name + "\nID: " + std::to_string(user_id);
-
-                                sendTextMessage(chat_id, result);
-
-                                return;
-
-                            }
-
-                            sendTextMessage(chat_id, "❌ Не удалось загрузить данные.");
-
-                        });
-
-                        return;
-
-                    }
+                    return;
 
                 }
 
-                sendTextMessage(chat_id, "❌ Ошибка получения оригинального сообщения.");
+                td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
+
+                if (replied_msg->sender_id_ && replied_msg->sender_id_->get_id() == td::td_api::messageSenderUser::ID) {
+
+                    const td::td_api::messageSenderUser& sender_user = static_cast<const td::td_api::messageSenderUser&>(*replied_msg->sender_id_);
+
+                    int64_t target_user_id = sender_user.user_id_;
+
+                    sendQuery(td::td_api::make_object<td::td_api::getUser>(target_user_id), [this, chat_id](td::td_api::object_ptr<td::td_api::Object> user_response) {
+
+                        if (user_response->get_id() == td::td_api::user::ID) {
+
+                            td::td_api::object_ptr<td::td_api::user> user_info = td::move_tl_object_as<td::td_api::user>(user_response);
+
+                            std::string result = "\u2139 Информация о пользователе:\nИмя: " + user_info->first_name_ + "\nID: " + std::to_string(user_info->id_);
+
+                            sendTextMessage(chat_id, result);
+
+                        } else {
+
+                            sendTextMessage(chat_id, "\u274C Не удалось загрузить данные пользователя.");
+
+                        }
+
+                    });
+
+                } else {
+
+                    sendTextMessage(chat_id, "\u274C Сообщение отправлено не пользователем (возможно, это канал или группа).");
+
+                }
 
             });
 
@@ -333,7 +366,7 @@ void Maru::setupCommands() {
 
         }
 
-        sendTextMessage(chat_id, "❌ Вызовите команду в ответ на сообщение пользователя.");
+        sendTextMessage(chat_id, "\u274C Вызовите команду в ответ на сообщение пользователя.");
 
     };
 
@@ -345,16 +378,13 @@ void Maru::setupCommands() {
 
     registerCommand("инфо", inf_logic);
 
-
-    auto id_logic = [this](const td::td_api::message& msg, const std::string& args) {
+    std::function<void(const td::td_api::message&, const std::string&)> id_logic = [this](const td::td_api::message& msg, const std::string& args) {
 
         int64_t chat_id = msg.chat_id_;
 
         if (msg.reply_to_ && msg.reply_to_->get_id() == td::td_api::messageReplyToMessage::ID) {
 
-            const auto& reply_info_base = msg.reply_to_;
-
-            auto& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*reply_info_base);
+            const td::td_api::messageReplyToMessage& reply_info = static_cast<const td::td_api::messageReplyToMessage&>(*msg.reply_to_);
 
             int64_t reply_message_id = reply_info.message_id_;
 
@@ -364,19 +394,17 @@ void Maru::setupCommands() {
 
                     td::td_api::object_ptr<td::td_api::message> replied_msg = td::move_tl_object_as<td::td_api::message>(response);
 
-                    if (replied_msg->forward_info_) {
+                    if (replied_msg->forward_info_ && replied_msg->forward_info_->origin_) {
 
-                        td::td_api::object_ptr<td::td_api::messageForwardInfo> f_info = std::move(replied_msg->forward_info_);
+                        if (replied_msg->forward_info_->origin_->get_id() == td::td_api::messageOriginUser::ID) {
 
-                        if (f_info->origin_ && f_info->origin_->get_id() == td::td_api::messageOriginUser::ID) {
+                            const td::td_api::messageOriginUser& origin_user = static_cast<const td::td_api::messageOriginUser&>(*replied_msg->forward_info_->origin_);
 
-                            td::td_api::object_ptr<td::td_api::messageOriginUser> origin_user = td::move_tl_object_as<td::td_api::messageOriginUser>(f_info->origin_);
+                            int64_t replied_to_id = origin_user.sender_user_id_;
 
-                            int64_t replied_to_id = origin_user->sender_user_id_;
+                            std::string result = "\U0001F194 Чат: " + std::to_string(chat_id) + "\n\U0001F464 Отправитель пересланного: " + std::to_string(replied_to_id);
 
-                            std::string result = "🆔 Чат: " + std::to_string(chat_id) + "\n👤 Отправитель: " + std::to_string(replied_to_id);
-
-                            sendTextMessage(chat_id, result); // Отправляем новое сообщение
+                            sendTextMessage(chat_id, result);
 
                             return;
 
@@ -386,7 +414,7 @@ void Maru::setupCommands() {
 
                 }
 
-                sendTextMessage(chat_id, "🆔 ID Чата: " + std::to_string(chat_id));
+                sendTextMessage(chat_id, "\U0001F194 ID Чата: " + std::to_string(chat_id));
 
             });
 
@@ -394,7 +422,7 @@ void Maru::setupCommands() {
 
         }
 
-        sendTextMessage(chat_id, "🆔 ID Чата: " + std::to_string(chat_id));
+        sendTextMessage(chat_id, "\U0001F194 ID Чата: " + std::to_string(chat_id));
 
     };
 
@@ -405,9 +433,10 @@ void Maru::setupCommands() {
 }
 
 
-
 void Maru::registerCommand(const std::string& name, commandHandler handler) {
+
     _commands[name] = handler;
+
 }
 
 void Maru::editMessageText(int64_t chat_id, int64_t message_id, const std::string& new_text) {
@@ -487,4 +516,3 @@ void Maru::sendTextMessage(int64_t chat_id, const std::string& text) {
               ));
 
 }
-
