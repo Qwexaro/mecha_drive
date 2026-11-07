@@ -108,7 +108,7 @@ void Maru::run() {
 
     std::cout << "Конфигурация успешно загружена." << std::endl << "Юзербот запущен. Инициализация сессии..." << std::endl;
 
-    auto get_version_query = td::td_api::make_object<td::td_api::getOption>("version");
+    td::td_api::object_ptr<td::td_api::getOption> get_version_query = td::td_api::make_object<td::td_api::getOption>("version");
 
     sendQuery(std::move(get_version_query));
 
@@ -116,7 +116,7 @@ void Maru::run() {
 
     while (_need_restart == 0) {
 
-        auto response = _client_manager->receive(10.0);
+        td::ClientManager::Response response = _client_manager->receive(10.0);
 
         if (response.object) processResponse(std::move(response));
 
